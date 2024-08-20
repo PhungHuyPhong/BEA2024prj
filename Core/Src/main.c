@@ -100,7 +100,8 @@ void delay(uint16_t delay);
 uint8_t calc_SAE_J1850(uint8_t data[], uint8_t crc_len);
 void CAN1_TX();
 void CAN2_TX();
-void CAN1_RX();
+void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan);
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan);
 /* USER CODE END 0 */
 
 /**
@@ -145,23 +146,24 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   // Example Function to print can message via uart
-  PrintCANLog(CAN1_pHeader.StdId, &CAN1_DATA_TX[0]);
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 	CAN2_TX();
-    if(!BtnU) /*IG OFF->ON stimulation*/
-    {
-      delay(20);
-      USART3_SendString((uint8_t *)"IG OFF ");
-      while(!BtnU);
-      MX_CAN1_Setup();
-      MX_CAN2_Setup();
-      USART3_SendString((uint8_t *)"-> IG ON \n");
-      delay(20);
-    }
+	CAN1_TX();
+	delay(4000);
+    //if(!BtnU) /*IG OFF->ON stimulation*/
+    //{
+      //delay(20);
+     // USART3_SendString((uint8_t *)"IG OFF ");
+     // while(!BtnU);
+     // MX_CAN1_Setup();
+     // MX_CAN2_Setup();
+     // USART3_SendString((uint8_t *)"-> IG ON \n");
+     // delay(20);
+    //}
   }
 
   memset(&REQ_BUFFER,0x00,4096);
@@ -294,7 +296,16 @@ static void MX_CAN2_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN2_Init 2 */
-
+  CAN2_sFilterConfig.FilterActivation = CAN_FILTER_ENABLE;
+  CAN2_sFilterConfig.FilterFIFOAssignment = CAN_RX_FIFO1;
+  CAN2_sFilterConfig.SlaveStartFilterBank = 13;
+  CAN2_sFilterConfig.FilterBank = 19;
+  CAN2_sFilterConfig.FilterMode = CAN_FILTERMODE_IDMASK;
+  CAN2_sFilterConfig.FilterScale = CAN_FILTERSCALE_16BIT;
+  CAN2_sFilterConfig.FilterIdHigh = 0x012 << 5;
+  CAN2_sFilterConfig.FilterIdLow = 0;
+  CAN2_sFilterConfig.FilterMaskIdHigh = 0x012 << 5;
+  CAN2_sFilterConfig.FilterMaskIdLow = 0;
   /* USER CODE END CAN2_Init 2 */
 
 }
@@ -389,7 +400,7 @@ void MX_CAN2_Setup()
 {
 	HAL_CAN_ConfigFilter(&hcan2, &CAN2_sFilterConfig);
 	HAL_CAN_Start(&hcan2);
-	HAL_CAN_ActivateNotification(&hcan2, CAN_IT_RX_FIFO0_MSG_PENDING);
+	HAL_CAN_ActivateNotification(&hcan2, CAN_IT_RX_FIFO1_MSG_PENDING);
 }
 
 void USART3_SendString(uint8_t *ch)
@@ -403,7 +414,7 @@ void USART3_SendString(uint8_t *ch)
 void PrintCANLog(uint16_t CAN_ID, uint8_t * CAN_Frame)
 {
 	char buffer[30]; // Adjust size as needed
-	sprintf(buffer, "0x%03X: %02X %02X %02X %02X %02X %02X %02X %02X\n",
+	sprintf(buffer, "0x%02X: %02X %02X %02X %02X %02X %02X %02X %02X\n",
 	            CAN_ID,
 	            CAN_Frame[0], CAN_Frame[1], CAN_Frame[2], CAN_Frame[3],
 	            CAN_Frame[4], CAN_Frame[5], CAN_Frame[6], CAN_Frame[7]);
@@ -454,11 +465,15 @@ void CAN1_TX(){
 	CAN1_pHeader.DLC = 8;
 	CAN1_pHeader.IDE = CAN_ID_STD;
 	CAN1_pHeader.RTR = CAN_RTR_DATA;
-	CAN1_DATA_TX[0] = 0x0A;
-	CAN1_DATA_TX[1] = 0x02;
-	CAN1_DATA_TX[2] = 0x0C;
-	CAN1_DATA_TX[7] = calc_SAE_J1850(CAN1_DATA_TX,7);
+	if(CAN1_DATA_RX[7] == calc_SAE_J1850(CAN1_DATA_RX,7)){
+		CAN1_DATA_TX[0] = 0x0A;
+		CAN1_DATA_TX[1] = 0x02;
+		CAN1_DATA_TX[2] = 0x0C;
+        CAN1_DATA_TX[6] = MessageCounter;
+		CAN1_DATA_TX[7] = calc_SAE_J1850(CAN1_DATA_TX,7);
+	}
 	HAL_CAN_AddTxMessage(&hcan1, &CAN1_pHeader, CAN1_DATA_TX, &CAN1_pTxMailbox);
+	MessageCounter = (MessageCounter +1) & 0xF;
 }
 void CAN2_TX(){
 	CAN2_pHeader.StdId = 0xA2;
@@ -472,8 +487,13 @@ void CAN2_TX(){
 	HAL_CAN_AddTxMessage(&hcan2, &CAN2_pHeader, CAN2_DATA_TX, &CAN2_pTxMailbox);
 	MessageCounter = (MessageCounter + 1) & 0xF;
 }
-void CAN1_RX(){
-
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
+	HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &CAN1_pHeaderRx, CAN1_DATA_RX);
+	PrintCANLog(0xA2, CAN1_DATA_RX);
+}
+void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan){
+	HAL_CAN_GetRxMessage(&hcan2, CAN_RX_FIFO1, &CAN2_pHeaderRx, CAN2_DATA_RX);
+	PrintCANLog(0x12, CAN2_DATA_RX);
 }
 /* USER CODE END 4 */
 
