@@ -152,8 +152,9 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	CAN2_TX();
+	delay(2000);
 	CAN1_TX();
-	delay(4000);
+	delay(1999);
     //if(!BtnU) /*IG OFF->ON stimulation*/
     //{
       //delay(20);
@@ -413,12 +414,32 @@ void USART3_SendString(uint8_t *ch)
 }
 void PrintCANLog(uint16_t CAN_ID, uint8_t * CAN_Frame)
 {
-	char buffer[30]; // Adjust size as needed
-	sprintf(buffer, "0x%02X: %02X %02X %02X %02X %02X %02X %02X %02X\n",
-	            CAN_ID,
-	            CAN_Frame[0], CAN_Frame[1], CAN_Frame[2], CAN_Frame[3],
-	            CAN_Frame[4], CAN_Frame[5], CAN_Frame[6], CAN_Frame[7]);
-	USART3_SendString(buffer);
+	uint16_t loopIndx = 0;
+		char bufID[3] = "   ";
+		char bufDat[2] = "  ";
+		char bufTime [8]="        ";
+
+		sprintf(bufTime,"%d",TimeStamp);
+		USART3_SendString((uint8_t*)bufTime);
+		USART3_SendString((uint8_t*)" ");
+
+		sprintf(bufID,"%03X",CAN_ID);
+		for(loopIndx = 0; loopIndx < 3; loopIndx ++)
+		{
+			bufsend[loopIndx]  = bufID[loopIndx];
+		}
+		bufsend[3] = ':';
+		bufsend[4] = ' ';
+
+		for(loopIndx = 0; loopIndx < 8; loopIndx ++ )
+		{
+			sprintf(bufDat,"%02X",CAN_Frame[loopIndx]);
+			bufsend[loopIndx*3 + 5] = bufDat[0];
+			bufsend[loopIndx*3 + 6] = bufDat[1];
+			bufsend[loopIndx*3 + 7] = ' ';
+		}
+		bufsend[29] = '\n';
+		USART3_SendString((unsigned char*)bufsend);
 }
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
@@ -472,6 +493,9 @@ void CAN1_TX(){
         CAN1_DATA_TX[6] = MessageCounter;
 		CAN1_DATA_TX[7] = calc_SAE_J1850(CAN1_DATA_TX,7);
 	}
+	char buffer1[9] = "CAN1TX\n";
+	USART3_SendString((unsigned char *)buffer1);
+	PrintCANLog(0x12, CAN1_DATA_TX);
 	HAL_CAN_AddTxMessage(&hcan1, &CAN1_pHeader, CAN1_DATA_TX, &CAN1_pTxMailbox);
 	MessageCounter = (MessageCounter +1) & 0xF;
 }
@@ -484,15 +508,22 @@ void CAN2_TX(){
 	CAN2_DATA_TX[1] = 0x02;
 	CAN2_DATA_TX[6] = MessageCounter;
 	CAN2_DATA_TX[7] = calc_SAE_J1850(CAN2_DATA_TX,7);
+	char buffer2[9] = "CAN2TX\n";
+	USART3_SendString((unsigned char *)buffer2);
+	PrintCANLog(0xA2, CAN2_DATA_TX);
 	HAL_CAN_AddTxMessage(&hcan2, &CAN2_pHeader, CAN2_DATA_TX, &CAN2_pTxMailbox);
 	MessageCounter = (MessageCounter + 1) & 0xF;
 }
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 	HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &CAN1_pHeaderRx, CAN1_DATA_RX);
+	char buffer3[9] = "CAN1RX\n";
+	USART3_SendString((unsigned char *)buffer3);
 	PrintCANLog(0xA2, CAN1_DATA_RX);
 }
 void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan){
 	HAL_CAN_GetRxMessage(&hcan2, CAN_RX_FIFO1, &CAN2_pHeaderRx, CAN2_DATA_RX);
+	char buffer4[9] = "CAN2RX\n";
+	USART3_SendString((unsigned char *)buffer4);
 	PrintCANLog(0x12, CAN2_DATA_RX);
 }
 /* USER CODE END 4 */
