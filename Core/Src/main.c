@@ -100,8 +100,10 @@ void delay(uint16_t delay);
 uint8_t calc_SAE_J1850(uint8_t data[], uint8_t crc_len);
 void CAN1_TX();
 void CAN2_TX();
+void CAN1_TxError();
 void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan);
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan);
+//void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
 /* USER CODE END 0 */
 
 /**
@@ -151,20 +153,26 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	if(!BtnU)
+	{
+	     delay(20);
+	     USART3_SendString((uint8_t *)"IG OFF\n");
+	     while(!BtnU);
+	     while (BtnU){
+	    	 CAN2_TX();
+	         delay(2000);
+	         CAN1_TxError();
+	         delay(2000);
+	     }
+	     //MX_CAN1_Setup();
+	     //MX_CAN2_Setup();
+	     USART3_SendString((uint8_t *)"-> IG ON\n");
+	     delay(20);
+	 }
 	CAN2_TX();
 	delay(2000);
 	CAN1_TX();
 	delay(1999);
-    //if(!BtnU) /*IG OFF->ON stimulation*/
-    //{
-      //delay(20);
-     // USART3_SendString((uint8_t *)"IG OFF ");
-     // while(!BtnU);
-     // MX_CAN1_Setup();
-     // MX_CAN2_Setup();
-     // USART3_SendString((uint8_t *)"-> IG ON \n");
-     // delay(20);
-    //}
   }
 
   memset(&REQ_BUFFER,0x00,4096);
@@ -377,13 +385,16 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : PA1 */
   GPIO_InitStruct.Pin = GPIO_PIN_1;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI0_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 1, 0);
+  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -481,6 +492,24 @@ uint8_t calc_SAE_J1850(uint8_t data[], uint8_t crc_len)
     }
     return crc;
 }
+void CAN1_TxError(){
+	CAN1_pHeader.StdId = 0x12;
+	CAN1_pHeader.DLC = 8;
+	CAN1_pHeader.IDE = CAN_ID_STD;
+	CAN1_pHeader.RTR = CAN_RTR_DATA;
+	if(CAN1_DATA_RX[7] == calc_SAE_J1850(CAN1_DATA_RX,7)){
+			CAN1_DATA_TX[0] = 0x0A;
+			CAN1_DATA_TX[1] = 0x02;
+			CAN1_DATA_TX[2] = 0x0C;
+	        CAN1_DATA_TX[6] = MessageCounter;
+			CAN1_DATA_TX[7] = calc_SAE_J1850(CAN1_DATA_TX,7) & 0;
+		}
+	char buffer1[9] = "CAN1TX\n";
+	USART3_SendString((unsigned char *)buffer1);
+	PrintCANLog(0x12, CAN1_DATA_TX);
+	HAL_CAN_AddTxMessage(&hcan1, &CAN1_pHeader, CAN1_DATA_TX, &CAN1_pTxMailbox);
+	MessageCounter = (MessageCounter +1) & 0xF;
+}
 void CAN1_TX(){
 	CAN1_pHeader.StdId = 0x12;
 	CAN1_pHeader.DLC = 8;
@@ -504,10 +533,18 @@ void CAN2_TX(){
 	CAN2_pHeader.DLC = 8;
 	CAN2_pHeader.IDE = CAN_ID_STD;
 	CAN2_pHeader.RTR = CAN_RTR_DATA;
-	CAN2_DATA_TX[0] = 0x0A;
-	CAN2_DATA_TX[1] = 0x02;
-	CAN2_DATA_TX[6] = MessageCounter;
-	CAN2_DATA_TX[7] = calc_SAE_J1850(CAN2_DATA_TX,7);
+    if(CAN2_DATA_RX[7] == calc_SAE_J1850(CAN2_DATA_RX,7)){
+	    CAN2_DATA_TX[0] = 0x0A;
+		CAN2_DATA_TX[1] = 0x02;
+		CAN2_DATA_TX[6] = MessageCounter;
+		CAN2_DATA_TX[7] = calc_SAE_J1850(CAN2_DATA_TX,7);
+    }
+    else{
+    	CAN2_DATA_TX[0] = 0x00;
+    	CAN2_DATA_TX[1] = 0x00;
+		CAN2_DATA_TX[6] = MessageCounter;
+		CAN2_DATA_TX[7] = calc_SAE_J1850(CAN2_DATA_TX,7);
+    }
 	char buffer2[9] = "CAN2TX\n";
 	USART3_SendString((unsigned char *)buffer2);
 	PrintCANLog(0xA2, CAN2_DATA_TX);
@@ -524,8 +561,16 @@ void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan){
 	HAL_CAN_GetRxMessage(&hcan2, CAN_RX_FIFO1, &CAN2_pHeaderRx, CAN2_DATA_RX);
 	char buffer4[9] = "CAN2RX\n";
 	USART3_SendString((unsigned char *)buffer4);
-	PrintCANLog(0x12, CAN2_DATA_RX);
+	if(CAN2_DATA_RX[7] == calc_SAE_J1850(CAN2_DATA_RX,7)){
+		PrintCANLog(0x12, CAN2_DATA_RX);
+	}
+	else{
+		char buffer5[8] = "ERROR\n";
+		USART3_SendString((unsigned char *)buffer5);
+	}
 }
+//void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
+//}
 /* USER CODE END 4 */
 
 /**

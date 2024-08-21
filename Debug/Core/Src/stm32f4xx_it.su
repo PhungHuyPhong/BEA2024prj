@@ -8,6 +8,7 @@
 ../Core/Src/stm32f4xx_it.c:174:6:PendSV_Handler	4	static
 ../Core/Src/stm32f4xx_it.c:187:6:SysTick_Handler	8	static
 ../Core/Src/stm32f4xx_it.c:212:6:EXTI0_IRQHandler	8	static
-../Core/Src/stm32f4xx_it.c:226:6:CAN1_RX0_IRQHandler	8	static
-../Core/Src/stm32f4xx_it.c:241:6:USART3_IRQHandler	8	static
-../Core/Src/stm32f4xx_it.c:255:6:CAN2_RX1_IRQHandler	8	static
+../Core/Src/stm32f4xx_it.c:226:6:EXTI1_IRQHandler	8	static
+../Core/Src/stm32f4xx_it.c:240:6:CAN1_RX0_IRQHandler	8	static
+../Core/Src/stm32f4xx_it.c:255:6:USART3_IRQHandler	8	static
+../Core/Src/stm32f4xx_it.c:269:6:CAN2_RX1_IRQHandler	8	static
