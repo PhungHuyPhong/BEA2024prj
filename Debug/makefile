@@ -63,8 +63,8 @@ all: main-build
 main-build: BEA_CAN2CAN_DEMO_TEN1HC_HUST.elf secondary-outputs
 
 # Tool invocations
-BEA_CAN2CAN_DEMO_TEN1HC_HUST.elf BEA_CAN2CAN_DEMO_TEN1HC_HUST.map: $(OBJS) $(USER_OBJS) D:\document\Automotive\BEA_2024_Training_Materials\BEA2024prj\STM32F405RGTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "BEA_CAN2CAN_DEMO_TEN1HC_HUST.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"D:\document\Automotive\BEA_2024_Training_Materials\BEA2024prj\STM32F405RGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="BEA_CAN2CAN_DEMO_TEN1HC_HUST.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+BEA_CAN2CAN_DEMO_TEN1HC_HUST.elf BEA_CAN2CAN_DEMO_TEN1HC_HUST.map: $(OBJS) $(USER_OBJS) D:\document\Automotive\BEA_2024_Training_Materials\BEA2024prjCommunication\STM32F405RGTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "BEA_CAN2CAN_DEMO_TEN1HC_HUST.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"D:\document\Automotive\BEA_2024_Training_Materials\BEA2024prjCommunication\STM32F405RGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="BEA_CAN2CAN_DEMO_TEN1HC_HUST.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
