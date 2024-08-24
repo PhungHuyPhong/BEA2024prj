@@ -40,8 +40,6 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-CAN_HandleTypeDef hcan1;
-CAN_HandleTypeDef hcan2;
 
 UART_HandleTypeDef huart3;
 
@@ -77,6 +75,7 @@ char bufsend[30]="XXX: D1 D2 D3 D4 D5 D6 D7 D8  ";
 
 uint8_t MessageCounter = 0;
 uint8_t flag = 0;
+uint8_t flag1 = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -470,7 +469,11 @@ void CAN_Tx(CAN_HandleTypeDef *hcan, CAN_TxHeaderTypeDef *pHeader, uint32_t *pTx
 	pHeader->DLC = 8;
 	pHeader->IDE = CAN_ID_STD;
 	pHeader->RTR = CAN_RTR_DATA;
-	if(data_rx[7] == calc_SAE_J1850(data_rx,7)){
+	if(flag1 == 1){
+		memcpy(CAN2_DATA_RX, CAN1_DATA_TX, 8*sizeof(uint8_t));
+		flag1 = 0;
+	}
+	if(((data_rx[7] == calc_SAE_J1850(data_rx,7)) && (flag == 0)) || ((flag == 1) && (hcan == &hcan1))){
 		data_tx[0] = 0x0A;
 		data_tx[1] = 0x02;
 		if(data_rx == CAN1_DATA_RX){
@@ -495,7 +498,6 @@ void CAN_Tx(CAN_HandleTypeDef *hcan, CAN_TxHeaderTypeDef *pHeader, uint32_t *pTx
 	HAL_CAN_AddTxMessage(hcan, pHeader, data_tx, pTxMailbox);
 	MessageCounter = MessageCounter & 0xF;
 }
-
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 	if(hcan == &hcan1){
 		HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &CAN1_pHeaderRx, CAN1_DATA_RX);
@@ -534,6 +536,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 					flag = 0;
 					USART3_SendString((uint8_t *)"-> IG ON\n");
 					CAN1_DATA_TX[7] = calc_SAE_J1850(CAN1_DATA_TX,7);
+					flag1 = flag1 +1;
 					break;
 				default:
 					break;
