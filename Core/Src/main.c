@@ -66,16 +66,13 @@ uint8_t CAN1_DATA_RX[8] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 uint8_t CAN2_DATA_TX[8] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 uint8_t CAN2_DATA_RX[8] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 
-uint16_t Num_Consecutive_Tester;
-uint8_t  Flg_Consecutive = 0;
-
 unsigned int TimeStamp;
 // maximum characters send out via UART is 30
 char bufsend[30]="XXX: D1 D2 D3 D4 D5 D6 D7 D8  ";
 
 uint8_t MessageCounter = 0;
-uint8_t flag = 0;
-uint8_t flag1 = 0;
+uint8_t FlagForBtn = 0;
+uint8_t flagCAN2Rx = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -89,16 +86,13 @@ void MX_CAN1_Setup();
 void MX_CAN2_Setup();
 void USART3_SendString(uint8_t *ch);
 void PrintCANLog(uint16_t CANID, uint8_t * CAN_Frame);
-void SID_22_Practice();
-void SID_2E_Practice();
-void SID_27_Practice();
 void delay(uint16_t delay);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint8_t calc_SAE_J1850(uint8_t data[], uint8_t crc_len);
-void CAN_Tx(CAN_HandleTypeDef *hcan, CAN_TxHeaderTypeDef *pHeader, uint32_t *pTxMailbox, uint8_t *data_rx, uint8_t *data_tx, uint16_t id);
+uint8_t calc_SAE_J1850(uint8_t data[], uint8_t crc_len, uint8_t check);
+void CAN_Tx(CAN_HandleTypeDef *hcan, uint8_t *data_rx, uint8_t *data_tx);
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan);
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
 /* USER CODE END 0 */
@@ -149,9 +143,9 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	CAN_Tx(&hcan2, &CAN2_pHeader, &CAN2_pTxMailbox, CAN2_DATA_RX, CAN2_DATA_TX, 0xA2);
+	CAN_Tx(&hcan2, CAN2_DATA_RX, CAN2_DATA_TX);
 	delay(2000);
-	CAN_Tx(&hcan1, &CAN1_pHeader, &CAN1_pTxMailbox, CAN1_DATA_RX, CAN1_DATA_TX, 0x12);
+	CAN_Tx(&hcan1, CAN1_DATA_RX, CAN1_DATA_TX);
 	delay(1990);
 	MessageCounter = MessageCounter + 1;
   }
@@ -217,7 +211,10 @@ static void MX_CAN1_Init(void)
 {
 
   /* USER CODE BEGIN CAN1_Init 0 */
-
+	CAN1_pHeader.StdId = 0x12;
+	CAN1_pHeader.DLC = 8;
+	CAN1_pHeader.IDE = CAN_ID_STD;
+	CAN1_pHeader.RTR = CAN_RTR_DATA;
   /* USER CODE END CAN1_Init 0 */
 
   /* USER CODE BEGIN CAN1_Init 1 */
@@ -263,7 +260,10 @@ static void MX_CAN2_Init(void)
 {
 
   /* USER CODE BEGIN CAN2_Init 0 */
-
+	CAN2_pHeader.StdId = 0xA2;
+	CAN2_pHeader.DLC = 8;
+	CAN2_pHeader.IDE = CAN_ID_STD;
+	CAN2_pHeader.RTR = CAN_RTR_DATA;
   /* USER CODE END CAN2_Init 0 */
 
   /* USER CODE BEGIN CAN2_Init 1 */
@@ -434,10 +434,10 @@ void delay(uint16_t delay)
 {
 	HAL_Delay(delay);
 }
-uint8_t calc_SAE_J1850(uint8_t data[], uint8_t crc_len)
+uint8_t calc_SAE_J1850(uint8_t data[], uint8_t crc_len, uint8_t check)
 {
     uint8_t idx, crc, temp1, temp2, idy;
-    crc = 0;
+    crc = check;
     idx = 0;
     idy = 0;
     temp1 = 0;
@@ -464,16 +464,13 @@ uint8_t calc_SAE_J1850(uint8_t data[], uint8_t crc_len)
     }
     return crc;
 }
-void CAN_Tx(CAN_HandleTypeDef *hcan, CAN_TxHeaderTypeDef *pHeader, uint32_t *pTxMailbox, uint8_t *data_rx, uint8_t *data_tx, uint16_t id){
-	pHeader->StdId = id;
-	pHeader->DLC = 8;
-	pHeader->IDE = CAN_ID_STD;
-	pHeader->RTR = CAN_RTR_DATA;
-	if(flag1 == 1){
+void CAN_Tx(CAN_HandleTypeDef *hcan, uint8_t *data_rx, uint8_t *data_tx){
+
+	if(flagCAN2Rx == 1){
 		memcpy(CAN2_DATA_RX, CAN1_DATA_TX, 8*sizeof(uint8_t));
-		flag1 = 0;
+		flagCAN2Rx = 0;
 	}
-	if(((data_rx[7] == calc_SAE_J1850(data_rx,7)) && (flag == 0)) || ((flag == 1) && (hcan == &hcan1))){
+	if(((data_rx[7] == calc_SAE_J1850(data_rx,7,0)) && (FlagForBtn == 0)) || ((FlagForBtn == 1) && (hcan == &hcan1))){
 		data_tx[0] = 0x0A;
 		data_tx[1] = 0x02;
 		if(data_rx == CAN1_DATA_RX){
@@ -485,17 +482,23 @@ void CAN_Tx(CAN_HandleTypeDef *hcan, CAN_TxHeaderTypeDef *pHeader, uint32_t *pTx
 		data_tx[1] = 0x00;
 	}
 	data_tx[6] = MessageCounter;
-	if(flag == 0){
-		data_tx[7] = calc_SAE_J1850(data_tx,7);
+	if(FlagForBtn == 0){
+		data_tx[7] = calc_SAE_J1850(data_tx,7,0);
 	}
 	else{
-		if(hcan == &hcan2) CAN2_DATA_TX[7] = calc_SAE_J1850(CAN2_DATA_TX,7);
+		if(hcan == &hcan2) CAN2_DATA_TX[7] = calc_SAE_J1850(CAN2_DATA_TX,7,0);
 	}
 	char buffer[10];
 	sprintf(buffer, "CAN %u TX\n", (hcan == &hcan1) ? 1 : 2);
 	USART3_SendString((unsigned char *)buffer);
+	uint8_t id = (hcan == &hcan1) ? 0x12 : 0xA2;
 	PrintCANLog(id, data_tx);
-	HAL_CAN_AddTxMessage(hcan, pHeader, data_tx, pTxMailbox);
+	if(hcan == &hcan1){
+		HAL_CAN_AddTxMessage(hcan, &CAN1_pHeader, data_tx, &CAN1_pTxMailbox);
+	}
+	else if(hcan == &hcan2){
+		HAL_CAN_AddTxMessage(hcan, &CAN2_pHeader, data_tx, &CAN2_pTxMailbox);
+	}
 	MessageCounter = MessageCounter & 0xF;
 }
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
@@ -507,7 +510,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
 	}
 	else if(hcan == &hcan2){
 		HAL_CAN_GetRxMessage(&hcan2, CAN_RX_FIFO0, &CAN2_pHeaderRx, CAN2_DATA_RX);
-		if(CAN2_DATA_RX[7] == calc_SAE_J1850(CAN2_DATA_RX,7)){
+		if(CAN2_DATA_RX[7] == calc_SAE_J1850(CAN2_DATA_RX,7,0)){
 			char buffer2[10] = "CAN 2 RX\n";
 			USART3_SendString((unsigned char *)buffer2);
 			PrintCANLog(0x12, CAN2_DATA_RX);
@@ -525,18 +528,18 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		delay(20);
 		if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_RESET)
 		{
-			switch(flag)
+			switch(FlagForBtn)
 			{
 				case 0:
-					flag = flag + 1;
+					FlagForBtn = FlagForBtn + 1;
 					USART3_SendString((uint8_t *)"IG OFF\n");
-					CAN1_DATA_TX[7] = calc_SAE_J1850(CAN1_DATA_TX,7) & 0x0;
+					CAN1_DATA_TX[7] = calc_SAE_J1850(CAN1_DATA_TX,7,1);
 					break;
 				case 1:
-					flag = 0;
+					FlagForBtn = 0;
 					USART3_SendString((uint8_t *)"-> IG ON\n");
-					CAN1_DATA_TX[7] = calc_SAE_J1850(CAN1_DATA_TX,7);
-					flag1 = flag1 +1;
+					CAN1_DATA_TX[7] = calc_SAE_J1850(CAN1_DATA_TX,7,0);
+					flagCAN2Rx = flagCAN2Rx +1;
 					break;
 				default:
 					break;
